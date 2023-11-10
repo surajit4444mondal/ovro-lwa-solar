@@ -5,6 +5,7 @@ from casatools import image, table, msmetadata, quanta, measures
 import numpy as np
 import logging, glob
 import primary_beam
+from astropy import units as u
 from primary_beam import analytic_beam as beam 
 from generate_calibrator_model import model_generation
 import generate_calibrator_model
@@ -346,8 +347,47 @@ def check_corrected_data_present(msname):
     finally:
         tb.close()
     return False
+
+
+def get_pixel_scale(imagename):
+    head=fits.getheader(imagename)
+    pixel_scale=[None]*2
+    #j=0
+    for j,key in enumerate(zip(['CUNIT1','CUNIT2'],['CDELT1','CDELT2'])):
+        key1=key[0]
+        key2=key[1]
+        if head[key1]=='deg':   
+            pixel_scale[j]=abs((head[key2]*u.deg).to(u.arcsec).value)
+        elif head[key1]=='rad':  
+            pixel_scale[j]=abs((head[key2]*u.rad).to(u.arcsec).value)
+        elif head[key1]=='arcmin':  
+            pixel_scale[j]=abs((head[key2]*u.arcmin).to(u.arcsec).value)
+        else:  
+            pixel_scale[j]=abs(head[key2])  
+         
+    pixel_scale=np.array(pixel_scale)
+    return pixel_scale
     
+def get_cutout_image(imagename,cutout_center,cutout_radius,outimage=None):
+    '''
+    Both cutout_center and cutout_radius should be in degrees
+    If outimage is None, ".cutout" is appended and to imagename 
+    and returned.
+    '''
+    if outimage is None:
+        outimage=imagename+".cutout"
+    from casatasks import imsubimage,exportfits
+    temp_image=imagename+".temp"
     
+    region='circle[['+str(cutout_center[0])+"deg,"+\
+           str(cutout_center[1])+"deg],"+\
+           str(cutout_radius)+"deg]"
+    imsubimage(imagename=imagename,region=region,\
+                       outfile=temp_image)
+    exportfits(imagename=temp_image,fitsimage=outimage)
+    os.system("rm -rf "+temp_image)
+    return
+                                            
 def correct_primary_beam(msfile, imagename, pol='I', fast_vis=False):
     '''
     Can handle multiple images in a list. However if providing multiple images
