@@ -469,3 +469,24 @@ def correct_primary_beam(msfile, imagename, pol='I', fast_vis=False):
                 hdu.flush()
                 hdu.close()
     return
+    
+def normalize(angle, lower=-np.pi, upper=np.pi):
+    """
+    Function to normalize any angles to between the lower limit and upper limit
+    :param angle: input angle in radians
+    :param lower: lower bound of the normalization, default to -pi
+    :param upper: upper bound of the normalization, default to pi
+    :return: normalized angle in radians
+    """
+    if lower >= upper:
+        raise ValueError("Invalid lower and upper limits: (%s, %s)" %
+                         (lower, upper))
+
+    res = angle
+    if angle > upper or angle == lower:
+        angle = lower + abs(angle + upper) % (abs(lower) + abs(upper))
+    if angle < lower or angle == upper:
+        angle = upper - abs(angle - lower) % (abs(lower) + abs(upper))
+
+    res = lower if res == upper else angle
+    return res    

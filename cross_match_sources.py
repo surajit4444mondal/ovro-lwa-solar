@@ -257,15 +257,16 @@ class cross_match():
         img_dec=img_data['DEC']
         s_code=img_data['S_Code']
 
+        pos=np.where((np.isnan(img_ra)==False) & (np.isnan(img_dec)==False) & (s_code=='S'))[0]
 
-        
-        self.img_ra=np.array(img_ra)
-        self.img_dec=np.array(img_dec)
+        self.img_ra=np.array(img_ra[pos])
+        self.img_dec=np.array(img_dec[pos])
+
         
         self.prune_dense_sources()
         
         #### Only take sources which could be fit by a single gaussian
-        pos=np.where((np.isnan(self.img_ra)==False) & (np.isnan(self.img_dec)==False) & (s_code=='S'))[0]
+        pos=np.where((np.isnan(self.img_ra)==False) & (np.isnan(self.img_dec)==False))[0]
 
         self.img_ra=np.array(self.img_ra[pos])
         self.img_dec=np.array(self.img_dec[pos])
