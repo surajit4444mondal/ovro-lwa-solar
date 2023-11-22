@@ -490,3 +490,17 @@ def normalize(angle, lower=-np.pi, upper=np.pi):
 
     res = lower if res == upper else angle
     return res    
+    
+    
+def radec_to_altaz(source_coordinate,obstime,observatory):
+    '''
+    source coordinate should be a Astropy SkyCoord
+    obstime should be Astropy Time format
+    observatory should be a string recognised by Astropy
+    '''
+    from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+    ovro_loc = EarthLocation.of_site(observatory)
+    altaz = source_coordinate.transform_to(AltAz(obstime=obstime,location=ovro_loc))
+    
+    
+    return altaz.alt.degree,altaz.az.degree        

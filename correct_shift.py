@@ -102,7 +102,7 @@ class correct_shift():
    
     
     def get_smoothed_shift_polynomial(self,ra1=None,dec1=None,ra2=None,dec2=None,\
-                    plots=False, smooth=50.0, sigcol=None, noisecol=None,\
+                    plots=False, smooth=200.0, sigcol=None, noisecol=None,\
                     SNR=10, latex=False,max_sources=None):
         '''
         This code is adapted from Natasha Hurley-Walker and Paul Hancock (fits_warp)
@@ -175,6 +175,8 @@ class correct_shift():
         ref_xy = imwcs.all_world2pix(list(zip(data[ra2], data[dec2],[hdr['CRVAL3']]*num_sources,[hdr['CRVAL4']]*num_sources)), 1)
 
         diff_xy = ref_xy - cat_xy
+        
+        #diff_xy=diff_xy-np.mean(diff_xy,axis=0)
 
         
         #dxmodel = interpolate.Rbf(
@@ -227,7 +229,7 @@ class correct_shift():
             gx2=np.ravel(gy)
             
             gx_2D=np.array([gx1,gx2]).T
-            print (gx_2D.shape)
+
             
             mdx = self.dxmodel(gx_2D)
             mdy = self.dymodel(gx_2D)
@@ -287,11 +289,13 @@ class correct_shift():
 
             ax = fig.add_subplot(gs[0:100, 49:97])
             cax = ax.quiver(gx, gy, mdx, mdy, np.degrees(np.arctan2(mdy, mdx)), **kwargs)
+            #cax = ax.quiver(x, y, dx-np.mean(dx), dy-np.mean(dy), angles, **kwargs)
             ax.set_xlim((xmin, xmax))
             ax.set_ylim((ymin, ymax))
             ax.set_xlabel("Distance from pointing centre / degrees")
             ax.tick_params(axis="y", labelleft="off")
-            ax.set_title("Model position offsets / arcsec")
+            #ax.set_title("Model position offsets / arcsec")
+            ax.set_title("Deviation from mean offset (arcsec)")
             #        cbar = fig.colorbar(cax, orientation='vertical')
             # Color bar
             ax2 = fig.add_subplot(gs[0:100, 98:100])
@@ -299,7 +303,7 @@ class correct_shift():
             cbar3.set_label("Angle CCW from West / degrees")  # ,labelpad=-75)
             cbar3.ax.yaxis.set_ticks_position("right")
 
-            outname = os.path.splitext(fname)[0] + ".png"
+            outname = os.path.splitext(fname)[0] + "_smooth_200pix.png"
             #        pyplot.show()
             pyplot.savefig(outname, dpi=200)
     
@@ -350,8 +354,8 @@ class correct_shift():
         self.mdx = self.dxmodel(self.solar_xy_pixel)[0]
         self.mdy = self.dymodel(self.solar_xy_pixel)[0]
         
-        print ("Shift pixels")
-        print (self.mdx,self.mdy)
+
+        
         
         
         pixel_scale=utils.get_pixel_scale(self.imagename)
