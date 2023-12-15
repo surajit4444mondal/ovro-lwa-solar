@@ -43,6 +43,8 @@ class correct_shift():
             self.vis=vis
         self.cutout_rad=cutout_rad
         self.overwrite=overwrite
+        self.imagename=imagename
+        self.refcat=refcat
         
     @property
     def vis(self):

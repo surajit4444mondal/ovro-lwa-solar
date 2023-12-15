@@ -2,9 +2,9 @@ from astropy.io import fits
 import h5py
 import numpy as np
 
-catalogue='VLSSR.CATALOG.FIT'
+catalogue='defaults/VLSSR.CATALOG.FIT'
 
-outfile='vlssr_catalogue_after_threshold.hdf5'
+outfile='defaults/vlssr_catalogue_after_threshold.hdf5'
 
 hdu=fits.open(catalogue,ignore_missing_end=True,mode='readonly')
 
