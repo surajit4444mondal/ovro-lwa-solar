@@ -520,7 +520,6 @@ class cross_match():
         
         if self.matched_source_cat is None:
             print (self.imagename)
-            self.matched_source_cat=self.imagename.replace("-image.fits",".facet_matched.cat.fits")
             print (self.matched_source_cat)
         
         if not os.path.isfile(self.matched_source_cat) or self.overwrite:
@@ -551,6 +550,10 @@ class cross_match():
             self.img_dec[id_image[-1]]=np.nan                   
 
     def match_source_after_bulk_shift_correction(self):
+        #TODO There is an inconsistency in the interpolation part. I found the issue and have corrected that in the
+        #TODO function matched_sources, which also has an interpolation component. The main issue here is that while
+        #TODO the x-points used to generate the interpolating function is very different from the ones uses when we
+        #TODO evaluate the polynomial
         self.read_reference_catalog()
 
         center=SkyOffsetFrame(origin=SkyCoord(np.mean(self.img_ra)*u.degree,np.mean(self.img_dec)*u.degree,frame='icrs'))
@@ -890,9 +893,10 @@ class cross_match():
         
         self.img_coord=SkyCoord(self.img_ra*u.degree,self.img_dec*u.degree,frame='icrs')
         
-        self.match_sources()
-  
-        self.write_matched_source_catalogue()
+        self.matched_source_cat=self.imagename.replace("-image.fits",".facet_matched.cat.fits")
+        if not os.path.isfile(self.matched_source_cat) or self.overwrite:
+            self.match_sources()
+            self.write_matched_source_catalogue()
 
         
         #self.match_source_after_bulk_shift_correction()
