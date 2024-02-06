@@ -348,6 +348,8 @@ class correct_shift():
             self.solar_loc=[sun_ra,sun_dec]
         
         self.get_matched_source_list()
+        if self.matched_cat is None:
+            return 1e5,1e5
         
         self.get_smoothed_shift_polynomial(plots=True)
         

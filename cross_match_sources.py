@@ -501,10 +501,14 @@ class cross_match():
         the osurce finding in the header.
         '''
         self.overwrite=True
-        col1 = fits.Column(name='ra', format='D', array=self.img_matched_source_coords[:,0])
-        col2 = fits.Column(name='dec', format='D', array=self.img_matched_source_coords[:,1])
-        col3 = fits.Column(name='RAJ2000', format='D', array=self.cat_matched_source_coords[:,0])
-        col4 = fits.Column(name='DECJ2000', format='D', array=self.cat_matched_source_coords[:,1])
+        try:
+            col1 = fits.Column(name='ra', format='D', array=self.img_matched_source_coords[:,0])
+            col2 = fits.Column(name='dec', format='D', array=self.img_matched_source_coords[:,1])
+            col3 = fits.Column(name='RAJ2000', format='D', array=self.cat_matched_source_coords[:,0])
+            col4 = fits.Column(name='DECJ2000', format='D', array=self.cat_matched_source_coords[:,1])
+        except AttributeError:
+            self.matched_source_cat=None
+            return
         coldefs = fits.ColDefs([col1, col2, col3, col4])
         hdu = fits.BinTableHDU.from_columns(coldefs)
         hdu.header['maxsep']=self.max_sep
@@ -525,8 +529,10 @@ class cross_match():
         if not os.path.isfile(self.matched_source_cat) or self.overwrite:
             hdu.writeto(self.matched_source_cat,overwrite=self.overwrite)
             logging.info("Matched sources written in %s",self.matched_source_cat)
+            
         else:
             logging.debug("Catalogue file not written because the file existed and user does not want to overwrite")
+            
     
     def prune_dense_sources(self):
         '''
@@ -715,18 +721,22 @@ class cross_match():
         
         img_xy=self.convert_skycoords_to_pixel(self.img_coord)
    
-        min_x=int(np.min(img_xy[:,0]))
-        max_x=int(np.max(img_xy[:,0]))
-        min_y=int(np.min(img_xy[:,1]))
-        max_y=int(np.max(img_xy[:,1]))
+        if np.size(img_xy)!=0:
+            min_x=int(np.min(img_xy[:,0]))
+            max_x=int(np.max(img_xy[:,0]))
+            min_y=int(np.min(img_xy[:,1]))
+            max_y=int(np.max(img_xy[:,1]))
+        else:
+            return
+
         #TODO Check if we need to add this extra padding 
         #min_x=int(max(0,min_x-1*self.max_sep/abs(head['CDELT1']))) #### some buffer for source finding
         #max_x=int(min(max_x+1*self.max_sep/abs(head['CDELT1']),head['NAXIS1']-1)) #### some buffer for source finding
         #min_y=int(max(0,min_y-1*self.max_sep/abs(head['CDELT1']))) #### some buffer for source finding
         #max_y=int(min(max_y+1*self.max_sep/abs(head['CDELT1']),head['NAXIS2']-1)) #### some buffer for source finding
         
-        pix_sep_facet_x=int((max_x-min_x)/self.num_facets_1d)
-        pix_sep_facet_y=int((max_y-min_y)/self.num_facets_1d)
+        pix_sep_facet_x=max(1,int((max_x-min_x)/self.num_facets_1d))
+        pix_sep_facet_y=max(1,int((max_y-min_y)/self.num_facets_1d))
         
        
         
@@ -837,7 +847,7 @@ class cross_match():
                   #                                          self.img_matched_source_coords[:,1]*u.deg]).T)
                 num_trial+=1
             else:
-                
+            
                 break
         
         
@@ -896,7 +906,7 @@ class cross_match():
         self.matched_source_cat=self.imagename.replace("-image.fits",".facet_matched.cat.fits")
         if not os.path.isfile(self.matched_source_cat) or self.overwrite:
             self.match_sources()
-            self.write_matched_source_catalogue()
+            success=self.write_matched_source_catalogue()
 
         
         #self.match_source_after_bulk_shift_correction()
