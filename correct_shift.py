@@ -296,8 +296,8 @@ class correct_shift():
             ax.set_ylim((ymin, ymax))
             ax.set_xlabel("Distance from pointing centre / degrees")
             ax.tick_params(axis="y", labelleft="off")
-            #ax.set_title("Model position offsets / arcsec")
-            ax.set_title("Deviation from mean offset (arcsec)")
+            ax.set_title("Model position offsets / arcsec")
+            
             #        cbar = fig.colorbar(cax, orientation='vertical')
             # Color bar
             ax2 = fig.add_subplot(gs[0:100, 98:100])
@@ -323,14 +323,11 @@ class correct_shift():
             hdu.close()
         
         imwcs = wcs.WCS(hdr)
-        print (self.solar_loc)
-        print (self.solar_loc[0].to(u.degree).value,self.solar_loc[1].to(u.degree).value, hdr['CRVAL3'],hdr['CRVAL4'])
         self.solar_xy_pixel = (imwcs.wcs_world2pix(np.array([self.solar_loc[0].to(u.degree).value,\
                                         self.solar_loc[1].to(u.degree).value,\
                                         hdr['CRVAL3'],\
                                         hdr['CRVAL4']]).reshape((1,4)), 1).squeeze())[:2]
         self.solar_xy_pixel=self.solar_xy_pixel.reshape((1,2))
-        print (self.solar_xy_pixel)  
        
     
     
