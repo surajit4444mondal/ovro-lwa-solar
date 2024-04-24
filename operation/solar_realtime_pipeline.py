@@ -116,7 +116,7 @@ def list_msfiles_old(intime, server='lwacalim', distributed=True, file_path='slo
 
 def list_msfiles(intime, lustre=True, file_path='slow', server=None, time_interval='10s', 
     #             bands=['32MHz', '36MHz', '41MHz', '46MHz', '50MHz', '55MHz', '59MHz', '64MHz', '69MHz', '73MHz', '78MHz', '82MHz']):
-                 bands=['82MHz']):
+                 bands=['46MHz','55MHz','78MHz']):
     """
     Return a list of visibilities to be copied for pipeline processing for a given time
     :param intime: astropy Time object
@@ -389,7 +389,7 @@ def run_calib(msfile, msfiles_cal=None, bcal_tables=None, do_selfcal=True, num_p
         return -1
 
 
-def run_imager(msfile_slfcaled, imagedir_allch=None, ephem=None, nch_out=12):
+def run_imager(msfile_slfcaled, imagedir_allch=None, ephem=None, nch_out=2):
     blc = int(512 - 128)
     trc = int(512 + 128 - 1)
     region='box [ [ {0:d}pix , {1:d}pix] , [{2:d}pix, {3:d}pix ] ]'.format(blc, blc, trc, trc)
@@ -562,6 +562,7 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             run_calib_partial = partial(run_calib, msfiles_cal=msfiles_cal, bcal_tables=bcal_tables, do_selfcal=do_selfcal, num_phase_cal=num_phase_cal, num_apcal=num_apcal, 
                     logger_file=logger_file, caltable_folder=caltable_folder, visdir_slfcaled=visdir_slfcaled, flagdir=flagdir)
             result = pool.map_async(run_calib_partial, msfiles)
+            
             timeout = 2000.
             result.wait(timeout=timeout)
             if result.ready():
@@ -855,7 +856,7 @@ if __name__=='__main__':
     args = parser.parse_args()
     try:
         run_pipeline(args.prefix, time_end=Time(args.end_time), time_interval=float(args.interval), nodes=int(args.nodes), delay_from_now=float(args.delay),
-                     proc_dir=args.proc_dir, save_dir=args.save_dir, calib_file=args.calib_file, logger_file=args.logger_file)
+                     proc_dir=args.proc_dir, save_dir=args.save_dir, calib_file=args.calib_file, logger_file=args.logger_file, multinode=False)
     except Exception as e:
         logging.error(e)
         raise e

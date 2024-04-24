@@ -298,8 +298,7 @@ def convert_to_heliocentric_coords(msname, imagename, helio_imagename=None, \
                  fitsfile=helio_imagename, usephacenter=True, verbose=True, \
                  toTb=True,subregion=subregion,ephem=ephem)
         return helio_imagename
-    except OSError:
-        raise OSError
+    except Exception as e:
         logging.warning("Could not convert to helicentric coordinates")
         return None
         

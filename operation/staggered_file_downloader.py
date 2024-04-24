@@ -7,6 +7,7 @@ import argparse
 import timeit
 import shlex, subprocess
 from casatasks import split
+import numpy as np
 
 def sun_riseset(date=Time.now(), observatory='ovro'):
     '''
@@ -39,6 +40,7 @@ def download_msfiles(msfiles, destination='/fast/bin.chen/20231014_eclipse/slow_
     """
     Parallelized downloading for msfiles returned from list_msfiles() to a destination.
     """
+
     inmsfiles_path = [f['path'] for f in msfiles]
     inmsfiles_name = [f['name'] for f in msfiles]
     inmsfiles_band = [f['freq'] for f in msfiles]
@@ -54,7 +56,7 @@ def download_msfiles(msfiles, destination='/fast/bin.chen/20231014_eclipse/slow_
                 #omsfiles_server.append(inmsfiles_server[idx])
                 omsfiles_path.append(inmsfiles_path[idx])
                 omsfiles_name.append(inmsfiles_name[idx])
-
+    
     nfile = len(omsfiles_path)
     if nfile == 0:
         print('No files to download. Abort...')
@@ -76,13 +78,12 @@ def download_msfiles(msfiles, destination='/fast/bin.chen/20231014_eclipse/slow_
     omsfiles = [destination + n for n in omsfiles_name]
     for msfile in omsfiles:
     	outputvis=msfile.replace('.ms','_4chan_avg.ms')
-    	split(vis=msfile,outputvis=outputvis,datacolumn='data',width=4,correlation='XX,YY')
     return omsfiles
     
         
 def list_msfiles(intime, lustre=True, file_path='slow', server=None, time_interval='10s', 
                 # bands=['32MHz', '36MHz', '41MHz', '46MHz', '50MHz', '55MHz', '59MHz', '64MHz', '69MHz', '73MHz', '78MHz', '82MHz']):
-                bands=['82MHz']):
+                bands=['46MHz','55MHz','78MHz']):
     """
     Return a list of visibilities to be copied for pipeline processing for a given time
     :param intime: astropy Time object
@@ -151,7 +152,7 @@ def download_msfiles_cmd(msfile_path, server, destination):
         print(std_err)
 
 def download_file(image_time,destination,min_nband=1,file_path='fast'):
-    bands = ['82MHz']#['32MHz', '36MHz', '41MHz', '46MHz', '50MHz', '55MHz', '59MHz', '64MHz', '69MHz', '73MHz', '78MHz', '82MHz']
+    bands = ['46MHz','55MHz','78MHz']#['32MHz', '36MHz', '41MHz', '46MHz', '50MHz', '55MHz', '59MHz', '64MHz', '69MHz', '73MHz', '78MHz', '82MHz']
     
     msfiles0 = list_msfiles(image_time, file_path=file_path)
     if len(msfiles0) < min_nband:
@@ -199,7 +200,18 @@ def copy_files(time_start=Time.now(), time_interval=10., delay_from_now=180.,\
             
 
         while True:
-            num_files=len(glob.glob(os.path.join(visdir_work,"*.ms")))
+            files=glob.glob(os.path.join(visdir_work,"*.ms"))
+            freqs=[]
+            for file1 in files:
+                cfreqidx = os.path.basename(file1).find('MHz') - 2
+                cfreq = int(os.path.basename(file1)[cfreqidx:cfreqidx+2])
+                freqs.append(cfreq)
+            if len(freqs)!=0:
+                freqs=np.array(freqs)
+                unique_freq=np.unique(freqs)
+                num_files=len(glob.glob(os.path.join(visdir_work,"*"+str(unique_freq[0])+"MHz*.ms")))
+            else:
+                num_files=0
             if num_files<max_files:
                 download_file(time_start,visdir_work)
                 time_start += TimeDelta(time_interval, format='sec')
