@@ -406,7 +406,8 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             logger_file=None, compress_fits=True,
             proc_dir = '/fast/bin.chen/realtime_pipeline/',
             save_dir = '/lustre/bin.chen/realtime_pipeline/',
-            calib_file = '20240117_145752'):
+            calib_file = '20240117_145752',
+            delete_working_ms=True):
     """
     Pipeline for processing and imaging slow visibility data
     :param time_start: start time of the visibility data to be processed
@@ -434,7 +435,7 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
     ## Night-time MS files used for calibration ##  We need to keep these files for fast vis analysis.
     msfiles_cal = glob.glob(visdir_calib + calib_file + '_*MHz.ms')
     msfiles_cal.sort()
-    print (msfiles_cal)
+
 
     bcal_tables = glob.glob(caltable_folder + calib_file + '_*MHz.bcal')
     bcal_tables.sort()
@@ -462,7 +463,9 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
         #logging.info('=======Processing Time {0:s}======='.format(image_time.isot))
         
         msfiles0 = list_msfiles(image_time,lustre=False,server=None,\
-                                file_path=visdir_work,time_interval='10s')
+                               file_path=visdir_work,time_interval='10s')
+        
+        print (msfiles0)
         num_trial=0
         while len(msfiles0) < min_nband and num_trial<10:
             print('This time only has {0:d} subbands. Check nearby +-10s time.'.format(len(msfiles0)))
@@ -497,6 +500,7 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
         timestr = msfiles0_name[0][:15]
         msfiles_slfcaled = glob.glob(visdir_slfcaled + '/' + timestr + '_*MHz*.ms')
         msfiles_slfcaled.sort()
+        print ("debug print",msfiles_slfcaled)
         if len(msfiles_slfcaled) == 0 or overwrite_ms:
             #msfiles0 = glob.glob(datadir_orig + timestr + '_*MHz.ms')
             #msfiles0.sort()
@@ -512,6 +516,7 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             #    os.system('cp -r '+ msfile0 + ' ' + visdir_work + '/')
             #    msfiles.append(visdir_work + '/' + os.path.basename(msfile0))
             msfiles = download_msfiles(msfiles0, destination=visdir_work, bands=bands)
+            print ("debug print",msfiles)
             time2 = timeit.default_timer()
             logging.debug('Time taken to copy files is {0:.1f} s'.format(time2-time1))
 
@@ -537,17 +542,20 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
                 logging.debug('Proceed anyway')
                 
             msfiles_slfcaled = result.get()
+            print (msfiles_slfcaled)
             pool.close()
             pool.join()
 
             for file1 in msfiles0_name:
                 timestr = file1[:15]
-                os.system('rm -rf '+ visdir_work + '/' + timestr + '*')
+                if delete_working_ms:
+                    os.system('rm -rf '+ visdir_work + '/' + timestr + '*')
         else:
             logging.debug('=====Selfcalibrated ms already exist for {0:s}. Proceed with imaging.========'.format(timestr)) 
             for file1 in msfiles0_name:
                 timestr = file1[:15]
-                os.system('rm -rf '+ visdir_work + '/' + timestr + '*')
+                if delete_working_ms:
+                    os.system('rm -rf '+ visdir_work + '/' + timestr + '*')
 
 
         # Do imaging
@@ -595,19 +603,22 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
                 logging.debug('Proceed anyway')
 
             fitsfiles = result.get()
-
+            print (fitsfiles)
             pool.close()
             pool.join()
+            
         else:
             logging.error('For time {0:s}, less than 4 bands out of {1:d} bands were calibrated successfully. Abort....'.format(timestr, len(bands)))
-            os.system('rm -rf '+ visdir_slfcaled + '/' + timestr + '_*MHz*.ms')
-            #os.system('rm -rf '+ caltable_folder + '/' + timestr + '_*MHz*')
+            for file1 in msfiles0_name:
+                timestr = file1[:15]
+                os.system('rm -rf '+ visdir_slfcaled + '/' + timestr + '_*MHz*.ms')
+                #os.system('rm -rf '+ caltable_folder + '/' + timestr + '_*MHz*')
             return False
 
         
         
         
-        if 'fitsfiles' in locals() and len(fitsfiles) >=1 and len(fitsfiles[0])>1:
+        if 'fitsfiles' in locals() and len(fitsfiles) >=1 and len(fitsfiles[0])>=1:
             ## define subdirectories for storing the fits and png files
             datedir = btime.isot[:10].replace('-','/')+'/'
             imagedir_allch_combined_sub = imagedir_allch_combined + '/' + datedir
@@ -634,6 +645,8 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             fitsfiles_mfs.sort()
             #ndfits.wrap(fitsfiles_mfs, outfitsfile=fits_mfs, docompress=compress_fits)
             ndfits.wrap(fitsfiles_mfs, outfitsfile=fits_mfs)
+            for file1 in fitsfiles_mfs:
+                os.system("rm -rf "+file1)
             '''
             
             
@@ -659,11 +672,13 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             utils.correct_primary_beam(msfiles_slfcaled[0],imagename=fits_fch)
             '''
             if delete_ms_slfcaled:
-                os.system('rm -rf '+ visdir_slfcaled + '/' + timestr + '_*MHz*.ms')
-                #os.system('rm -rf '+ caltable_folder + '/' + timestr + '_*MHz*')
+                for file1 in msfiles0_name:
+                    timestr = file1[:15]
+                    os.system('rm -rf '+ visdir_slfcaled + '/' + timestr + '_*MHz*.ms')
+                    #os.system('rm -rf '+ caltable_folder + '/' + timestr + '_*MHz*')
 
 
-            '''
+            
             # Plot mfs images (1 image per subband)
             fig = plt.figure(figsize=(15., 8.))
             fov = 8000
@@ -681,12 +696,12 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
                     im = rmap_plt.imshow(axes=ax, cmap='hinodexrt')
                     rmap_plt.draw_limb(ls='-', color='w', alpha=0.5)
 
-                    bmaj,bmin,bpa = meta['cbmaj'][bd],meta['cbmin'][bd],meta['cbpa'][bd]
-                    beam0 = Ellipse((-fov/2*0.75, -fov/2*0.75), bmaj*3600,
+                    #bmaj,bmin,bpa = meta['cbmaj'][bd],meta['cbmin'][bd],meta['cbpa'][bd]
+                    #beam0 = Ellipse((-fov/2*0.75, -fov/2*0.75), bmaj*3600,
                             #bmin*3600, angle=(-bpa),  fc='None', lw=2, ec='w')
-                            bmin*3600, angle=-(90.-bpa),  fc='None', lw=2, ec='w')
+                     #       bmin*3600, angle=-(90.-bpa),  fc='None', lw=2, ec='w')
 
-                    ax.add_artist(beam0)
+                    #ax.add_artist(beam0)
 
                     cbar = plt.colorbar(im)
                     cbar.set_label(r'$T_B$ (MK)')
@@ -714,7 +729,7 @@ def pipeline_quick(image_time=Time.now() - TimeDelta(20., format='sec'), server=
             text2 = fig.text(0.99, 0.01, 'OVRO Long Wavelength Array (Caltech)', fontsize=12, ha='right', va='bottom')
             fig.savefig(fig_mfs_dir_sub + '/' + os.path.basename(fits_mfs).replace('.image.fits', '.png'))
             plt.close()
-            '''
+            
             time_completed= timeit.default_timer() 
             logging.debug('====All processing for time {0:s} is done in {1:.1f} seconds'.format(timestr, (time_completed-time_begin)))
             return True
