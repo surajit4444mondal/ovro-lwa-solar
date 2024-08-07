@@ -4,22 +4,29 @@ from casatools import table, measures, componentlist, msmetadata
 import math
 import sys, os, time
 import numpy as np
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from astropy.wcs import WCS
 from astropy.io import fits
-from . import utils,calibration,deconvolve
+import matplotlib.pyplot as plt
+from . import utils,flagging,calibration,deconvolve
 from . import flux_scaling
 import logging, glob
-from line_profiler import profile
-
+from .file_handler import File_Handler
+from .primary_beam import analytic_beam as beam 
+from . import primary_beam
+from .generate_calibrator_model import model_generation
+from . import generate_calibrator_model
 import timeit
 tb = table()
 me = measures()
 cl = componentlist()
 msmd = msmetadata()
 
-@profile
+
 def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', logging_level='info', caltable_folder='caltables/',
-               ms_keyword='di_selfcal_time',pol='I', refant='202', niter0=1000, 
-               niter_incr=500, auto_pix_fov=False, quiet=True):
+               ms_keyword='di_selfcal_time',pol='I', refant='202', niter0=1000, niter_incr=500, auto_pix_fov=False, \
+               bandpass_selfcal=False):
     
     time1=timeit.default_timer()          
     logging.debug('The plan is to do ' + str(num_phase_cal) + " rounds of phase selfcal")
@@ -43,7 +50,7 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
     for i in range(num_phase_cal):
         imagename = msfile[:-3] + "_self" + str(i)
         deconvolve.run_wsclean(msfile, imagename=imagename, niter=niters[i], 
-                               mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov, quiet=quiet)
+                               mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov)
         good = utils.check_image_quality(imagename, max1, min1)
        
         print(good)
@@ -53,7 +60,7 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
             logging.debug('Dynamic range has reduced. Doing a round of flagging')
             flagdata(vis=msfile, mode='rflag', datacolumn='corrected')
             deconvolve.run_wsclean(msfile, imagename=imagename, niter=niters[i], mgain=0.9, 
-                                   auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov, quiet=quiet)
+                                   auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov)
             
             good = utils.check_image_quality(imagename, max1, min1,reorder=False)
             
@@ -79,8 +86,12 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
                 return good
         logging.debug("Finding gain solutions and writing in into " + imagename + ".gcal")
         time1=timeit.default_timer()
-        gaincal(vis=msfile, caltable=imagename + ".gcal", uvrange=">10lambda",
+        if not bandpass_selfcal:
+            gaincal(vis=msfile, caltable=imagename + ".gcal", uvrange=">10lambda",
                 calmode='p', solmode='L1R', rmsthresh=[10, 8, 6], refant=refant)
+        else:
+            calibration.find_bandpass_sol(msfile,caltable=imagename + ".gcal", uvrange=">10lambda",\
+                refant=refant,calmode='ap')
         time2=timeit.default_timer()
         logging.debug('Solving for selfcal gain solutions took {0:.1f} s'.format(time2-time1))
         utils.put_keyword(imagename + ".gcal", ms_keyword, utils.get_keyword(msfile, ms_keyword))
@@ -101,7 +112,7 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
     for i in range(num_phase_cal, num_phase_cal + num_apcal):
         imagename = msfile[:-3] + "_self" + str(i)
         deconvolve.run_wsclean(msfile, imagename=imagename, niter=np.max(niters) + (i+1) * niter_incr,
-                                mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov, quiet=quiet)
+                                mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov)
         
         good = utils.check_image_quality(imagename, max1, min1)
         
@@ -111,7 +122,7 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
             logging.debug('Dynamic range has reduced. Doing a round of flagging')
             flagdata(vis=msfile, mode='rflag', datacolumn='corrected')
             deconvolve.run_wsclean(msfile, imagename=imagename, niter=np.max(niters),
-                                mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov, quiet=quiet)
+                                mgain=0.9, auto_mask=False, auto_threshold=False, pol=pol, auto_pix_fov=auto_pix_fov)
             
             good = utils.check_image_quality(imagename, max1, min1, reorder=False)
             
@@ -145,10 +156,14 @@ def do_selfcal(msfile, num_phase_cal=2, num_apcal=2, applymode='calflag', loggin
                         clearcal(msfile)
                 return good
         caltable = imagename + "_ap_over_p.gcal"
-
-        gaincal(vis=msfile, caltable=caltable, uvrange=">10lambda",
-                calmode='ap', solnorm=True, normtype='median', solmode='L1R',
-                rmsthresh=[10, 8, 6], gaintable=final_phase_caltable, refant=refant)
+        
+        if not bandpass_selfcal:
+            gaincal(vis=msfile, caltable=caltable, uvrange=">10lambda",
+                    calmode='ap', solnorm=True, normtype='median', solmode='L1R',
+                    rmsthresh=[10, 8, 6], gaintable=final_phase_caltable, refant=refant)
+        else:
+            calibration.find_bandpass_sol(msfile,caltable=imagename + ".gcal", uvrange=">10lambda",\
+                refant=refant,calmode='ap')
         utils.put_keyword(caltable, ms_keyword, utils.get_keyword(msfile, ms_keyword))
         if logging_level == 'debug' or logging_level == 'DEBUG':
             utils.get_flagged_solution_num(imagename + "_ap_over_p.gcal")
