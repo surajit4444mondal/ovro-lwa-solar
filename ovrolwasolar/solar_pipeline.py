@@ -272,7 +272,8 @@ def image_ms_quick(solar_ms, calib_ms=None, bcal=None, do_selfcal=True, imagenam
              refant='202', niter0=600, niter_incr=200, overwrite=False,
              auto_pix_fov=False, fast_vis=False, fast_vis_image_model_subtraction=False,
              delete_allsky=True, sky_image=None, quiet=True, remove_strong_sources_only=False,
-             src_sb_sol_area=200., src_sb_src_area=200., shape_sun_mask='circ', include_edge_source=-1):
+             src_sb_sol_area=200., src_sb_src_area=200., shape_sun_mask='circ', include_edge_source=-1,
+             solint_full_DI_selfcal=600, solint_partial_DI_selfcal=4):
     """
     Pipeline to calibrate and imaging a solar visibility. 
     This is the version that optimizes the speed with a somewhat reduced image dynamic range.
@@ -312,28 +313,31 @@ def image_ms_quick(solar_ms, calib_ms=None, bcal=None, do_selfcal=True, imagenam
     time1=time2
     logging.debug('Analysing ' + solar_ms)
     if do_selfcal:
-        #outms_di = selfcal.DI_selfcal(solar_ms, logging_level=logging_level, full_di_selfcal_rounds=full_di_selfcal_rounds,
-        #                      partial_di_selfcal_rounds=[0, 0], pol=pol, refant=refant, caltable_folder=caltable_folder)
-        mstime_str = utils.get_timestr_from_name(solar_ms)
-        success = utils.put_keyword(solar_ms, 'di_selfcal_time', mstime_str, return_status=True)
-        success = selfcal.do_selfcal(solar_ms, num_phase_cal=num_phase_cal, num_apcal=num_apcal, logging_level=logging_level, pol=pol,
-            refant=refant, niter0=niter0, niter_incr=niter_incr, caltable_folder=caltable_folder, auto_pix_fov=auto_pix_fov, quiet=quiet)
-        outms_di = solar_ms[:-3] + "_selfcalibrated.ms"
-        if do_fluxscaling:
-            logging.debug('Doing a flux scaling using background strong sources')
-            fc=flux_scaling.flux_scaling(vis=solar_ms, min_beam_val=0.1, pol=pol)
-            fc.correct_flux_scaling()
-            logging.debug('Splitted the selfcalibrated MS into a file named ' + solar_ms[:-3] + "_selfcalibrated.ms")
-            split(vis=solar_ms, outputvis=outms_di, datacolumn='data')
-        else:
-            logging.debug('Splitted the selfcalibrated MS into a file named ' + solar_ms[:-3] + "_selfcalibrated.ms")
+
+        outms_di = selfcal.DI_selfcal(solar_ms, logging_level=logging_level, full_di_selfcal_rounds=[num_phase_cal,num_apcal],
+                              partial_di_selfcal_rounds=[0, 0], pol=pol, refant=refant, caltable_folder=caltable_folder,\
+                              niter0=niter0, niter_incr=niter_incr, auto_pix_fov=auto_pix_fov, quiet=quiet,\
+                              solint_full_selfcal=solint_full_DI_selfcal,solint_partial_selfcal=solint_partial_DI_selfcal)
+        #mstime_str = utils.get_timestr_from_name(solar_ms)
+        #success = utils.put_keyword(solar_ms, 'di_selfcal_time', mstime_str, return_status=True)
+        #success = selfcal.do_selfcal(solar_ms, num_phase_cal=num_phase_cal, num_apcal=num_apcal, logging_level=logging_level, pol=pol,
+        #    refant=refant, niter0=niter0, niter_incr=niter_incr, caltable_folder=caltable_folder, auto_pix_fov=auto_pix_fov, quiet=quiet)
+        #outms_di = solar_ms[:-3] + "_selfcalibrated.ms"
+        #if do_fluxscaling:
+        #    logging.debug('Doing a flux scaling using background strong sources')
+        #    fc=flux_scaling.flux_scaling(vis=solar_ms, min_beam_val=0.1, pol=pol)
+        #    fc.correct_flux_scaling()
+        #    logging.debug('Splitted the selfcalibrated MS into a file named ' + solar_ms[:-3] + "_selfcalibrated.ms")
+        #    split(vis=solar_ms, outputvis=outms_di, datacolumn='data')
+        #else:
+        #    logging.debug('Splitted the selfcalibrated MS into a file named ' + solar_ms[:-3] + "_selfcalibrated.ms")
             #split(vis=solar_ms, outputvis=outms_di, datacolumn='corrected')
             ##### putting in a hand-split in an effort to run the realtime pipeline continuously
-            utils.manual_split_corrected_ms(solar_ms, outms_di)
+        #    utils.manual_split_corrected_ms(solar_ms, outms_di)
             
         time2=timeit.default_timer()
         logging.debug('Time taken for selfcal and fluxscaling is: {0:.1f} s'.format(time2-time1))
-        print(outms_di)
+
     else:
         outms_di = solar_ms
 
