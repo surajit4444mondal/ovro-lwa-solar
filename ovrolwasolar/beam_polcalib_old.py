@@ -34,7 +34,7 @@ def compute_primary_beam_from_beamfiles(freqs,model_beam_file,tims=None, az=None
 
     num_tims=len(alt)
     num_freqs=freqs.size
-    factors=np.zeros((num_freqs,num_tims,16))
+    factors=np.zeros((num_freqs,num_tims,7))
     for j,freq1 in enumerate(freqs):
         if j==0:
             beamfac=beam(freq=freq1,beam_file_path=model_beam_file)
@@ -46,14 +46,13 @@ def compute_primary_beam_from_beamfiles(freqs,model_beam_file,tims=None, az=None
         
         for i in range(num_tims):
             pol_fac=beamfac.get_muller_matrix_stokes(beamfac.jones_matrices[i,:,:])
-            factors[j,i,:]=np.ndarray.flatten(pol_fac)
-            #factors[j,i,0]=pol_fac[0,0].real### I primary beam
-            #factors[j,i,1]=pol_fac[1,0].real ### leakage from I to Q due to primary_beam
-            #factors[j,i,2]=pol_fac[2,0].real ### leakage from I to U due to primary_beam
-            #factors[j,i,3]=pol_fac[3,0].real ### leakage from I to V due to primary_beam
-            #factors[j,i,4]=pol_fac[1,1].real ### Q primary_beam 
-            #factors[j,i,5]=pol_fac[2,2].real ### U primary_beam
-            #factors[j,i,6]=pol_fac[3,3].real ### V primary_beam
+            factors[j,i,0]=pol_fac[0,0].real### I primary beam
+            factors[j,i,1]=pol_fac[1,0].real ### leakage from I to Q due to primary_beam
+            factors[j,i,2]=pol_fac[2,0].real ### leakage from I to U due to primary_beam
+            factors[j,i,3]=pol_fac[3,0].real ### leakage from I to V due to primary_beam
+            factors[j,i,4]=pol_fac[1,1].real ### Q primary_beam 
+            factors[j,i,5]=pol_fac[2,2].real ### U primary_beam
+            factors[j,i,6]=pol_fac[3,3].real ### V primary_beam
             
     if  normalise_wrt_I:       
         return np.swapaxes(factors/np.expand_dims(factors[:,:,0],axis=2),1,2) ## all factors are in respect to I value
@@ -288,8 +287,8 @@ class beam_polcal():
         
         for i in range(num_freqs):
             print (i)
-            Umodel=self.primary_beam[8,i,:]*self.stokes_data[0,i,:]
-            Vmodel=self.primary_beam[12,i,:]*self.stokes_data[0,i,:]
+            Umodel=self.primary_beam[2,i,:]*self.stokes_data[0,i,:]
+            Vmodel=self.primary_beam[3,i,:]*self.stokes_data[0,i,:]
             
             red_chi=1000
             
@@ -637,7 +636,7 @@ class beam_polcal():
         return
     
     
-    def determine_stokesI_leakage(self,stokes_data, QU_only=False,polynomial_degree=1):
+    def determine_stokesI_leakage(self,pol_frac,QU_only=False,polynomial_degree=1):
         '''
         This function determines the leakage from Stokes I by fitting a polynomial to
         the polarisation fraction of each Stokes parameter. This is done on each frequency.
@@ -645,17 +644,6 @@ class beam_polcal():
         :param QU_only: Leakage subtraction will be done only on Stokes V.
         :return a npy ndarray of polyfit results. Shape: num_stokes x num_freqs x poly degree (numpy polyfit convention)
         '''
-        
-        frac_pol=np.zeros_like(stokes_data)
-        if QU_only:
-            max_pol_ind=2
-        else:
-            max_pol_ind=3
-        
-        for i in range(1,max_pol_ind+1):
-            frac_pol[i,...]=stokes_data[i,:,:]/stokes_data[0,:,:]-self.primary_beam[4*i,:,:]
-        
-        
         num_freqs=pol_frac.shape[1]
         poly=np.zeros((4,num_freqs,(polynomial_degree+1)))
         poly[0,...]=0
@@ -698,7 +686,7 @@ class beam_polcal():
             
         return poly
     
-    def get_leakage_from_database(self,database=None, mean_subtracted=False):
+    def get_leakage_from_database(self,mean_subtracted=False,database=None):
         '''
         This reads the database and produces the leakage fractions for all
         stokes by doing a nearest neighbour interpolation in alt-az and linear
@@ -747,11 +735,10 @@ class beam_polcal():
             max_pol_ind=3
         
         for i in range(1,max_pol_ind+1):
-            frac_pol[i,...]=stokes_data[i,:,:]/stokes_data[0,:,:]-self.primary_beam[4*i,:,:]
-        
+            frac_pol[i,...]=stokes_data[i,:,:]/stokes_data[0,:,:]-self.primary_beam[i,:,:]
         
         if not hasattr(self,'beam_leakage_fractions'):
-            self.poly=self.determine_stokesI_leakage(stokes_data,QU_only=QU_only,\
+            self.poly=self.determine_stokesI_leakage(frac_pol,QU_only=QU_only,\
                                              polynomial_degree=polynomial_degree)
             
             logging.debug("Leakage from Stokes I to other Stokes parameters have been successfully determined.")
@@ -776,18 +763,6 @@ class beam_polcal():
         stokes_corrected[1:max_pol_ind+1,:,:]=(frac_pol[1:max_pol_ind+1,:,:]-\
                                                 self.beam_leakage_fractions[1:max_pol_ind+1,:,:]+\
                                                 self.primary_beam[1:max_pol_ind+1,:,:])
-        corrected_muller=np.zeros_like(stokes_data)
-        
-        
-        for freq_ind in range(num_freqs):
-            for t1 in range(num_tims):
-                primary_beam=self.primary_beam[:,freq_ind,t1].reshape((4,4))
-                
-                for pol_ind in range(1,max_pol_ind+1):
-                    pol_fac[pol_ind,0]=beam_pol.beam_leakage_fractions[pol_ind,freq_ind,t1]*pol_fac[0,0]
-                    
-                muller_inverse=np.linalg.inv(pol_fac)
-                leakage_corrected_muller[:,freq_ind,t1]=np.matmul(muller_inverse,crosshand_corrected_data[:,freq_ind,t1])
         if mean_subtracted:
             stokes_corrected[1:max_pol_ind+1,:,:]-=mean_leak[1:max_pol_ind+1,:,:]
         
@@ -815,14 +790,12 @@ class beam_polcal():
         for s in range(1,stokes_num):
             for i in range(num_freqs):
                 leak_vals[s,i,:]=np.polyval(np.poly1d(self.poly[s,i,:]),times_to_write)
-                                        
-        
-        self.beam_leakage_fractions[1,:,:]=leak_vals+self.primary_beam[4,:,:]/np.expand_dims(self.primary_beam[0,:,:],axis=0)
-        self.beam_leakage_fractions[2,:,:]=leak_vals+self.primary_beam[8,:,:]/np.expand_dims(self.primary_beam[0,:,:],axis=0)
-        self.beam_leakage_fractions[3,:,:]=leak_vals+self.primary_beam[12,:,:]/np.expand_dims(self.primary_beam[0,:,:],axis=0)
         
         if subtract_mean:
-            self.beam_leakage_fractions-=np.expand_dims(np.nanmean(self.beam_leakage_fractions,axis=2),axis=2)
+            self.beam_leakage_fractions=leak_vals-np.expand_dims(np.nanmean(leak_vals,axis=2),axis=2)+\
+                                        self.primary_beam[:4,:,:]/np.expand_dims(self.primary_beam[0,:,:],axis=0)
+        else:
+            self.beam_leakage_fractions=leak_vals+self.primary_beam[:4,:,:]/np.expand_dims(self.primary_beam[0,:,:],axis=0)
         
     def determine_beam_leakage_fractions_from_db(self,max_pol_ind,mean_subtracted=False):
         '''
@@ -1103,16 +1076,15 @@ class image_polcal_astronomical_source():
         self.az,self.alt=get_altaz_multiple_times(self.times,self.sky_coord)
         primary_beam=compute_primary_beam_from_beamfiles(self.freqs,model_beam_file=self.model_beam_file,\
                                                         az=self.az,alt=self.alt)
-        self.UV_norm=np.nanmean(np.sqrt(primary_beam[:,8,:]**2+primary_beam[:,12,:]**2),axis=1)
-        #### primary beam has a flattened array Muller matrix.
+        self.UV_norm=np.nanmean(np.sqrt(primary_beam[:,2,:]**2+primary_beam[:,3,:]**2),axis=1)
         self.determine_DI_leakage()
         DI_corrected_DS_frac=self.correct_DI_leakage()
         num_freqs=self.freqs.size
         self.crosshand_theta=np.zeros(num_freqs)*np.nan
         for i in range(num_freqs):
               
-            Umodel=primary_beam[i,8,:]
-            Vmodel=primary_beam[i,12,:]
+            Umodel=primary_beam[i,2,:]
+            Vmodel=primary_beam[i,3,:]
             
             red_chi=1000
             
