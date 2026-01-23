@@ -363,22 +363,22 @@ class jones_beam:
                 self.model_freqs=np.array(hf['freq_Hz'])*1e-6  ### converting to MHz
                 self.theta_pts=np.array(hf['theta_pts'])
                 self.phi_pts=np.array(hf['phi_pts'])
-                self.Xpol_ephi=np.array(hf['X_pol_Efields/ephi'])  # N_freq,N_theta,N_phi
-                self.Xpol_etheta=np.array(hf['X_pol_Efields/etheta']) #N_freq,N_theta,N_phi
-                self.Ypol_ephi=np.array(hf['Y_pol_Efields/ephi']) # N_freq,N_theta,N_phi
-                self.Ypol_etheta=np.array(hf['Y_pol_Efields/etheta']) # N_freq,N_theta,N_phi
+                self.Xpol_ey=np.array(hf['X_pol_Efields/ey'])  # N_freq,N_theta,N_phi
+                self.Xpol_ex=np.array(hf['X_pol_Efields/ex']) #N_freq,N_theta,N_phi
+                self.Ypol_ey=np.array(hf['Y_pol_Efields/ey']) # N_freq,N_theta,N_phi
+                self.Ypol_ex=np.array(hf['Y_pol_Efields/ex']) # N_freq,N_theta,N_phi
             ### I will normalize using the values at zenith (az=0, zenith_angle=0)
-            xpol_phi_max=np.abs(self.Xpol_ephi[:,0,0])
-            xpol_theta_max=np.abs(self.Xpol_etheta[:,0,0])
-            ypol_phi_max=np.abs(self.Ypol_ephi[:,0,0])
-            ypol_theta_max=np.abs(self.Ypol_etheta[:,0,0])
+            xpol_y_max=np.abs(self.Xpol_ey[:,0,0])
+            xpol_x_max=np.abs(self.Xpol_ex[:,0,0])
+            ypol_y_max=np.abs(self.Ypol_ey[:,0,0])
+            ypol_x_max=np.abs(self.Ypol_ex[:,0,0])
             
             self.max_e=np.zeros(self.model_freqs.size)
             for i in range(self.model_freqs.size):
             ### These are the normalising terms. The factor 0.5 comes from the definition
             ### of I used. I= 0.5*(XX+YY).
-                self.max_e[i]=np.sqrt(0.5*(xpol_phi_max[i]**2+xpol_theta_max[i]**2+\
-                                        ypol_phi_max[i]**2+ypol_theta_max[i]**2))
+                self.max_e[i]=np.sqrt(0.5*(xpol_y_max[i]**2+xpol_x_max[i]**2+\
+                                        ypol_y_max[i]**2+ypol_x_max[i]**2))
         except Exception as e:
             logging.warning("Beam file does not exist in give path."+\
                     "Switching to analytical beam.")
@@ -403,13 +403,15 @@ class jones_beam:
             gains=np.zeros((self.num_theta,num_phi))
             for i in range(num_phi):
                 for j in range(num_theta):
-                    J1=np.array([[Xpol_etheta[freq_ind,j,i],Xpol_ephi[freq_ind,j,i]],\
-                                [Ypol_etheta[freq_ind,j,i],Ypol_ephi[freq_ind,j,i]]])
+                    J1=np.array([[Xpol_ex[freq_ind,j,i],Xpol_ey[freq_ind,j,i]],\
+                                [Ypol_ex[freq_ind,j,i],Ypol_ey[freq_ind,j,i]]])
 
                     J3=self.get_source_pol_factors(J1)
                     gain[j,i]=0.5*(J3[0,0]+J3[1,1])
             self.max_vals[freq_ind]=np.max(np.abs(gain))
             del gain
+            
+    
 
     def srcjones(self,az,el):
         """Compute beam scaling factor
@@ -440,28 +442,28 @@ class jones_beam:
         
         if self._beamfile:
             #print (np.size(P),np.size(grid_el),np.shape(self.gain_theta[0]))
-            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Xpol_etheta)
-            sources_e_theta_x= interpolating_function((self.freq,za_rad,az_rad))
+            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Xpol_ex)
+            sources_e_x_x= interpolating_function((self.freq,za_rad,az_rad))
             
 
             
-            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Xpol_ephi)
-            sources_e_phi_x= interpolating_function((self.freq,za_rad,az_rad))
+            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Xpol_ey)
+            sources_e_y_x= interpolating_function((self.freq,za_rad,az_rad))
             
 
             
-            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Ypol_etheta)
-            sources_e_theta_y= interpolating_function((self.freq,za_rad,az_rad))
+            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Ypol_ex)
+            sources_e_x_y= interpolating_function((self.freq,za_rad,az_rad))
             
-            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Ypol_ephi)
-            sources_e_phi_y= interpolating_function((self.freq,za_rad,az_rad))
+            interpolating_function = RegularGridInterpolator((self.model_freqs,self.theta_pts,self.phi_pts), self.Ypol_ey)
+            sources_e_y_y= interpolating_function((self.freq,za_rad,az_rad))
             
                                         
             max_val_freq=np.interp(self.freq,self.model_freqs,self.max_e)
             
             for i in range(self.num_sources):
-                self.jones_matrices[i,:,:]=[[sources_e_theta_x[i],sources_e_phi_x[i]],\
-                                        [sources_e_theta_y[i],sources_e_phi_y[i]]]/max_val_freq  ### zenith normalisation
+                self.jones_matrices[i,:,:]=[[sources_e_x_x[i],sources_e_y_x[i]],\
+                                        [sources_e_x_y[i],sources_e_y_y[i]]]/max_val_freq  ### zenith normalisation
         else:
             Ifctr=np.sin(el*np.pi/180)**1.6
             for i in range(self.num_sources):
